@@ -49,7 +49,6 @@ Le mode invisible peut être ignoré par Windows ou une application. Aucun dépl
 Pré-requis de développement uniquement : Rust stable avec Cargo, un linker Windows (Visual Studio Build Tools C++ + SDK pour MSVC, MinGW-w64 GCC pour GNU, ou LLVM-MinGW pour `x86_64-pc-windows-gnullvm`), Inno Setup **6** facultatif. Les outils ne sont pas intégrés à l'application et aucun runtime externe n'est installé chez l'utilisateur. `.cargo/config.toml` active la liaison statique des composants runtime pour MSVC et GNU-LLVM ; le binaire GNU-LLVM livré n'importe que des DLL Windows, dont l'UCRT fourni avec Windows 10/11. MSVC n'a pas été compilé dans cet environnement.
 
 ```powershell
-cd GhostMice
 cargo build --release
 cargo test --locked
 .\scripts\build.ps1
