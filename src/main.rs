@@ -7,11 +7,30 @@ mod scheduler;
 mod windows;
 
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     io::{self, Write},
     process::ExitCode,
-    time::Instant,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+
+fn log_error(context: &str, error: &io::Error) {
+    // Best effort: a missing/unwritable TEMP must never stop the agent.
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(std::env::temp_dir().join("GhostMice-errors.log"))
+    {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        let _ = writeln!(
+            file,
+            "unix_ms={timestamp} pid={} {context}: {error}",
+            std::process::id()
+        );
+    }
+}
 
 fn run() -> io::Result<()> {
     let mut args = std::env::args_os().skip(1);
@@ -37,26 +56,40 @@ fn run() -> io::Result<()> {
     } else {
         None
     };
+    run_loop(
+        |duration| stop.wait(duration),
+        |elapsed| {
+            // Observation is confined to the explicitly requested diagnostic mode.
+            if let Some(file) = report.as_mut() {
+                activity::diagnostic_cycle(file, elapsed)
+            } else {
+                activity::cycle()
+            }
+        },
+        |error| log_error("cycle (retry at next scheduled interval)", error),
+        testing,
+    )
+}
+
+fn run_loop(
+    mut wait: impl FnMut(Duration) -> io::Result<bool>,
+    mut cycle: impl FnMut(Duration) -> io::Result<()>,
+    mut on_error: impl FnMut(&io::Error),
+    testing: bool,
+) -> io::Result<()> {
     let started = Instant::now();
     let mut scheduler = scheduler::Scheduler::new(started);
     let mut cycles = 0;
     loop {
-        if stop.wait(scheduler.remaining(Instant::now()))? {
+        if wait(scheduler.remaining(Instant::now()))? {
             return Ok(());
         }
         let elapsed = started.elapsed();
-        // Normal operation only calls SendInput. Observation is confined to diagnostics.
-        let result = if let Some(file) = report.as_mut() {
-            activity::diagnostic_cycle(file, elapsed)
-        } else {
-            activity::cycle()
-        };
-        if let Err(error) = result {
-            if let Some(file) = report.as_mut() {
-                writeln!(file, "ERROR: {error}")?;
+        if let Err(error) = cycle(elapsed) {
+            if testing {
+                return Err(error);
             }
-            // No hot retries: failures terminate silently with a nonzero exit code.
-            return Err(error);
+            on_error(&error);
         }
         cycles += 1;
         if testing && cycles == 2 {
@@ -69,6 +102,75 @@ fn run() -> io::Result<()> {
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
-        Err(_) => ExitCode::FAILURE,
+        Err(error) => {
+            log_error("fatal", &error);
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cycle_failure_retries_on_schedule_and_can_recover() {
+        let mut waits = Vec::new();
+        let mut cycles = 0;
+        let mut errors = 0;
+        run_loop(
+            |duration| {
+                waits.push(duration);
+                Ok(waits.len() == 3)
+            },
+            |_| {
+                cycles += 1;
+                if cycles == 1 {
+                    Err(io::Error::other("temporary injection failure"))
+                } else {
+                    Ok(())
+                }
+            },
+            |_| errors += 1,
+            false,
+        )
+        .unwrap();
+        assert_eq!(cycles, 2);
+        assert_eq!(errors, 1);
+        // Fake waits return immediately, but every retry must still request a wait.
+        assert_eq!(waits.len(), 3);
+        assert!(waits[1] > waits[0]);
+        assert!(waits[2] > waits[1]);
+    }
+
+    #[test]
+    fn repeated_cycle_failures_remain_stoppable() {
+        let mut waits = 0;
+        let mut errors = 0;
+        run_loop(
+            |_| {
+                waits += 1;
+                Ok(waits == 4)
+            },
+            |_| Err(io::Error::other("injection blocked")),
+            |_| errors += 1,
+            false,
+        )
+        .unwrap();
+        assert_eq!(errors, 3);
+    }
+
+    #[test]
+    fn diagnostic_failure_is_still_reported_as_failure() {
+        let result = run_loop(
+            |_| Ok(false),
+            |_| Err(io::Error::other("diagnostic injection failure")),
+            |_| panic!("diagnostics must return the error to main"),
+            true,
+        );
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "diagnostic injection failure"
+        );
     }
 }

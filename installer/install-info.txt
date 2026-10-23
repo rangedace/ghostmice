@@ -2,5 +2,7 @@ GhostMice démarre silencieusement après l'installation et à chaque ouverture 
 Une entrée GhostMice est créée dans le démarrage Windows de votre compte (HKCU Run).
 Un événement synthétique de souris de déplacement relatif (0, 0) est envoyé toutes les 30 secondes.
 Aucun clic, aucun déplacement volontaire du pointeur, aucune connexion réseau.
+En cas d'erreur uniquement, un journal local est écrit dans %TEMP%\GhostMice-errors.log.
+Un échec d'injection ne ferme pas l'agent : il réessaie au prochain cycle de 30 secondes.
 La reconnaissance de cette activité par Microsoft Teams n'est pas garantie.
 La désinstallation arrête l'agent du compte et supprime l'entrée de démarrage.

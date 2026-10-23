@@ -2,7 +2,7 @@
 param()
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$setup = Join-Path $root 'dist\GhostMice-Setup-0.1.0.exe'
+$setup = Join-Path $root 'dist\GhostMice-Setup-0.1.1.exe'
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{2DC53565-A814-4C88-BCB0-786B1C3B34A1}_is1'
 $dir = Join-Path $env:LOCALAPPDATA 'GhostMice-Installation-Test'

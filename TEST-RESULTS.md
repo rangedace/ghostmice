@@ -56,3 +56,13 @@ Le 19 octobre 2026, après renommage du projet, du paquet Cargo, du binaire, de 
 - `scripts/verify-install.ps1` : installation temporaire, entrée Run GhostMice, instance unique, arrêt, relance et désinstallation vérifiés avec succès, sans agent ni entrée Run laissés par le test.
 
 Les mesures détaillées plus haut proviennent de la validation initiale ; les deux tests natifs et le diagnostic de 60 secondes n'ont pas été réexécutés pour le renommage.
+
+## Correction 0.1.1 du 23 octobre 2026
+
+- `cargo fmt --check`, `cargo test --locked -- --test-threads=1` et Clippy avec `-D warnings` réussis : **6 tests réussis, 2 tests natifs ignorés**.
+- Trois tests de régression avec erreurs simulées vérifient la reprise au prochain cycle après un échec, l'arrêt après des échecs répétés et le code d'échec conservé en diagnostic. Les attentes sont simulées dans ces tests ; aucun bureau verrouillé n'a été imposé.
+- Binaire Release exécuté normalement pendant **35 secondes** dans un TEMP de test isolé : toujours actif après le premier cycle réel de 30 secondes, aucun fichier journal créé, puis arrêt coopératif avec le code 0 et toujours aucun journal.
+- Deux lancements avec un argument invalide : code 1 et exactement deux lignes ajoutées à `GhostMice-errors.log`, chacune contenant horodatage Unix en millisecondes, PID, contexte et erreur.
+- Journal inaccessible (chemin occupé par un répertoire), puis TEMP inexistant : l'échec de journalisation n'empêche pas le retour du code attendu, sans blocage.
+- Compilation Release et génération de `dist\GhostMice-Setup-0.1.1.exe` avec Inno Setup **6.7.3** réussies ; version produit 0.1.1 vérifiée.
+- L'installation 0.1.0 existante et son démarrage automatique n'ont pas été remplacés. Le cycle installation/désinstallation n'a pas été réexécuté : `scripts/verify-install.ps1` refuse volontairement une installation préexistante. La mise à niveau réelle et une nouvelle ouverture de session restent à vérifier.

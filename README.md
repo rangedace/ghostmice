@@ -33,7 +33,9 @@ Move Mouse est sous GPL v3. GhostMice est une implémentation Rust nouvelle du m
 
 Chaque cycle normal fournit exactement un `INPUT_MOUSE`, `dx=0`, `dy=0`, `mouseData=0`, `dwFlags=MOUSEEVENTF_MOVE`, `time=0` et une balise `dwExtraInfo=0x47484F53`. Il ne lit et ne restaure jamais la position en production : pas de course de repositionnement contre une souris physique. Aucun déplacement n'est demandé, y compris aux bords ou sur plusieurs écrans. Les applications peuvent néanmoins recevoir et interpréter l'événement synthétique.
 
-Le retour `SendInput == 1` prouve seulement l'acceptation de l'événement par cette API. [Microsoft documente les restrictions UIPI](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput) : les programmes de niveau d'intégrité supérieur et les bureaux sécurisés peuvent bloquer l'injection. Un échec termine l'agent avec le code 1, sans boucle de relance ni élévation. Les erreurs de démarrage ont aussi le code 1 ; un doublon sort avec 0.
+Le retour `SendInput == 1` prouve seulement l'acceptation de l'événement par cette API. [Microsoft documente les restrictions UIPI](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput) : les programmes de niveau d'intégrité supérieur et les bureaux sécurisés peuvent bloquer l'injection. En fonctionnement normal, un échec est journalisé et l'agent réessaie au prochain cycle de 30 secondes, sans relance immédiate ni élévation. L'arrêt coopératif reste disponible. Les erreurs fatales (démarrage, attente, arrêt) terminent avec le code 1 ; un doublon sort avec 0.
+
+Le fichier `%TEMP%\GhostMice-errors.log` est créé ou complété **uniquement en cas d'erreur**, avec l'horodatage Unix en millisecondes, le PID, le contexte et le message d'erreur. Aucun journal d'activité normale n'est écrit. Si ce journal est inaccessible, l'agent continue sans journaliser. Les diagnostics explicitement lancés avec `--test` conservent leur journal détaillé séparé et échouent avec le code 1 dès qu'un cycle échoue.
 
 Quatre effets distincts :
 
@@ -56,7 +58,7 @@ cargo test --locked
 
 Profil Release : `opt-level="z"`, LTO, une unité de génération, panic abort et symboles retirés. Le script vérifie les codes de sortie et cherche `ISCC.exe` dans PATH puis les chemins habituels. Ajouter le répertoire d'un Inno portable à PATH si nécessaire. Il n'installe et ne télécharge rien. La première compilation Cargo nécessite les crates en cache ou un accès réseau ; l'exécution finale est entièrement locale.
 
-Sorties : `target\release\ghostmice.exe` et, si Inno 6 est disponible, `dist\GhostMice-Setup-0.1.0.exe`. Le binaire est portable ; lancer seul le binaire ne configure pas le démarrage automatique.
+Sorties : `target\release\ghostmice.exe` et, si Inno 6 est disponible, `dist\GhostMice-Setup-0.1.1.exe`. Le binaire est portable ; lancer seul le binaire ne configure pas le démarrage automatique.
 
 ## Installation et arrêt
 
@@ -81,7 +83,7 @@ Start-Process .\target\release\ghostmice.exe -ArgumentList '--test' -WindowStyle
 Get-Content "$env:TEMP\GhostMice-test.log"
 ```
 
-`--test` garde les mêmes 30 s, exécute deux cycles puis sort (~60 s). Seul ce mode écrit `%TEMP%\GhostMice-test.log` (écrasé au prochain test), avec temps monotone, deltas, nombre accepté, position avant/après et ticks de dernière entrée. Le journal reste local et n'est pas une configuration. En présence d'une instance normale, le test sort comme doublon sans réécrire le journal : arrêter l'instance d'abord. Une sonde par hook `WH_MOUSE_LL` compte les événements portant la balise et le flag `LLMHF_INJECTED`, sans bloquer ni modifier l'événement, puis retire le hook. Un compte de zéro est rapporté comme tel : ce n'est pas un test de réception réussi. Une position avant/après identique seule ne prouverait pas l'absence de déplacement transitoire ; ici le contenu nul de l'entrée est aussi vérifié.
+`--test` garde les mêmes 30 s, exécute deux cycles puis sort (~60 s). Seul ce mode écrit le journal détaillé `%TEMP%\GhostMice-test.log` (écrasé au prochain test), avec temps monotone, deltas, nombre accepté, position avant/après et ticks de dernière entrée. Le journal reste local et n'est pas une configuration. En présence d'une instance normale, le test sort comme doublon sans réécrire le journal : arrêter l'instance d'abord. Une sonde par hook `WH_MOUSE_LL` compte les événements portant la balise et le flag `LLMHF_INJECTED`, sans bloquer ni modifier l'événement, puis retire le hook. Un compte de zéro est rapporté comme tel : ce n'est pas un test de réception réussi. Une position avant/après identique seule ne prouverait pas l'absence de déplacement transitoire ; ici le contenu nul de l'entrée est aussi vérifié.
 
 Le script `scripts\verify-install.ps1` fait une installation réelle temporaire, vérifie Run, lancement, doublon, arrêt, relance via la commande Run, puis désinstallation et absence de processus de ce chemin. Il refuse une installation GhostMice préexistante. Il ne remplace pas une véritable fermeture/réouverture de session.
 
